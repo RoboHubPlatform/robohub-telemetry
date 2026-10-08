@@ -1,0 +1,25 @@
+# robohub-telemetry Kconfig
+
+menu "RoboHub telemetry"
+
+config RH_TELEMETRY
+    bool "Telemetry bridge"
+    default n
+    help
+      Bridges the runtime's event bus to transport and net sinks: per-event
+      decimation, multi-sink routing and log interception. A program that streams
+      readings to an edge or cloud service selects it.
+
+config RH_TELEMETRY_MAX_SINKS
+    int "Output sinks"
+    default 4
+    help
+      How many channels telemetry may write at once.
+
+config RH_TELEMETRY_MAX_RULES
+    int "Bridged events"
+    default 8
+    help
+      How many events may be bridged at once.
+
+endmenu

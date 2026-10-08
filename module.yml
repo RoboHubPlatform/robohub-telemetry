@@ -1,0 +1,91 @@
+#
+# robohub-telemetry — bridges the event bus to transport and net sinks.
+#
+# Subscribes to the events a program names, decimates them per event, and writes
+# each frame to every enabled sink: a transport for a serial link, a socket for
+# an IP one. Also carries structured log lines to the same sinks.
+#
+# @project RoboHub Platform
+# @license MIT
+#
+
+module:
+  name: robohub-telemetry
+  type: runtime
+  version: 0.1.0
+  description: >
+    Binds the runtime's event bus to physical sinks — transport frames and IP
+    sockets — with per-event decimation, multi-sink routing and log interception.
+
+  maintainer: "Aurel Miron"
+  license: "MIT"
+  created: "2026-10-08"
+
+build:
+  language: c
+  standard: c11
+  include_dirs:
+    - include/
+    - include/robohub/
+  sources:
+    - src/telemetry.c
+
+depends:
+  - name: robohub-common
+    type: c
+    path: /home/miraur/projects/robohub-common
+    git: https://github.com/RoboHubPlatform/robohub-common
+    branch: main
+  - name: robohub-core
+    type: c
+    path: /home/miraur/projects/robohub-core
+    git: https://github.com/RoboHubPlatform/robohub-core
+    branch: main
+  - name: robohub-transport
+    type: c
+    path: /home/miraur/projects/robohub-transport
+    git: https://github.com/RoboHubPlatform/robohub-transport
+    branch: main
+
+config:
+  dialect: linux
+  kconfig_fragments:
+    - Kconfig
+
+exports:
+  headers:
+    - robohub/telemetry.h
+  cmake:
+    target: "rho::robohub-telemetry"
+    include_dirs:
+      - include
+    link_libraries:
+      - rho::robohub-common
+      - rho::robohub-core
+      - rho::robohub-transport
+
+tests:
+  enabled: true
+  test_dirs:
+    - tests/
+  test_files:
+    - tests/test_telemetry.c
+
+testing:
+  host_tests:
+    enabled: true
+    target_constraint: "native"
+
+package:
+  kind: library
+  binary: false
+
+metadata:
+  tags:
+    - runtime
+    - telemetry
+    - sinks
+    - decimation
+    - logging
+  stability: experimental
+  visibility: public
