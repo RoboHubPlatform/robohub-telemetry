@@ -115,5 +115,19 @@ int main(void)
     assert(robohub_core_event_publish(TEST_EVENT, payload, (rh_size)sizeof(payload)) == ROBOHUB_OK);
     assert(transport_frames == 4);
 
+    /* A transaction id reaches the sink. A request and its response share one,
+     * and a bridge that framed every event with 0 would make every response
+     * look unsolicited, so a host could never match an answer to its call. */
+    assert(robohub_telemetry_enable_event(TEST_EVENT, 1u) == ROBOHUB_OK);
+    socket_len = 0;
+    socket_frames = 0;
+    const rh_u8 tx_payload[] = { 0xAB, 0xCD };
+    assert(robohub_core_event_publish_with_tx(TEST_EVENT, 0x1234u, tx_payload,
+                                              (rh_size)sizeof(tx_payload)) == ROBOHUB_OK);
+    assert(socket_frames == 1);
+    assert(socket_len == 6u + sizeof(tx_payload) + 2u);
+    assert(socket_bytes[2] == 0x34u && socket_bytes[3] == 0x12u);
+    assert(memcmp(&socket_bytes[6], tx_payload, sizeof(tx_payload)) == 0);
+
     return 0;
 }
