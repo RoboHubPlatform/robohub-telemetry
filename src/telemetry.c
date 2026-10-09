@@ -47,9 +47,15 @@ static void put_u16(rh_u8* out, rh_u16 value)
     out[1] = (rh_u8)((value >> 8) & 0xFFu);
 }
 
-/* One frame to one sink, by that sink's kind. */
+/* One frame to one sink, by that sink's kind.
+ *
+ * `tx_id` is the transaction the event belongs to, read from the bus while the
+ * event is dispatched. Telemetry publishes with 0; a request and its response
+ * share one, so carrying it here is what lets an edge tell its answer from
+ * another's. Dropping it would make every response look unsolicited. */
 static void route_to(const RoboHubTelemetrySink* sink,
                      robohub_event_id id,
+                     rh_u16 tx_id,
                      const void* payload,
                      rh_u16 length)
 {
@@ -58,7 +64,7 @@ static void route_to(const RoboHubTelemetrySink* sink,
             stats.frames_dropped++;
             return;
         }
-        if (robohub_transport_send(sink->handle.transport, id, 0u, payload, length) == ROBOHUB_OK) {
+        if (robohub_transport_send(sink->handle.transport, id, tx_id, payload, length) == ROBOHUB_OK) {
             stats.frames_routed++;
         } else {
             stats.frames_dropped++;
@@ -76,7 +82,7 @@ static void route_to(const RoboHubTelemetrySink* sink,
     }
     rh_u8 frame[RH_TRANSPORT_MAX_FRAME_SIZE];
     put_u16(&frame[0], (rh_u16)id);
-    put_u16(&frame[2], 0u);
+    put_u16(&frame[2], tx_id);
     put_u16(&frame[4], length);
     if (length > 0u && payload != 0) {
         memcpy(&frame[RH_TRANSPORT_HEADER_SIZE], payload, length);
@@ -92,28 +98,30 @@ static void route_to(const RoboHubTelemetrySink* sink,
     }
 }
 
-static void route(robohub_event_id id, const void* payload, rh_u16 length)
+static void route(robohub_event_id id, rh_u16 tx_id, const void* payload, rh_u16 length)
 {
     for (rh_u32 i = 0; i < sink_count; i++) {
         if (sinks[i].enabled) {
-            route_to(&sinks[i], id, payload, length);
+            route_to(&sinks[i], id, tx_id, payload, length);
         }
     }
 }
 
 /* The bus callback. Its `user` is the rule, which is what carries the
- * decimation counter without a lookup. */
+ * decimation counter without a lookup. The transaction id is the bus's, not the
+ * event's, so it is read while the event is being dispatched. */
 static RoboHubError on_event(robohub_event_id id, const void* payload, rh_size size, void* user)
 {
     rule* entry = (rule*)user;
+    rh_u16 tx_id = robohub_core_event_current_tx();
     if (entry->every <= 1u) {
-        route(id, payload, (rh_u16)size);
+        route(id, tx_id, payload, (rh_u16)size);
         return ROBOHUB_OK;
     }
     entry->count++;
     if (entry->count >= entry->every) {
         entry->count = 0u;
-        route(id, payload, (rh_u16)size);
+        route(id, tx_id, payload, (rh_u16)size);
     }
     return ROBOHUB_OK;
 }
@@ -203,7 +211,7 @@ void robohub_telemetry_log(rh_u8 level, const char* tag, const char* message)
     if ((rh_size)length >= sizeof(text)) {
         length = (int)sizeof(text) - 1; /* snprintf truncated it; send what fits */
     }
-    route(ROBOHUB_TELEMETRY_LOG_EVENT, text, (rh_u16)length);
+    route(ROBOHUB_TELEMETRY_LOG_EVENT, 0u, text, (rh_u16)length);
 }
 
 void robohub_telemetry_stats(RoboHubTelemetryStats* out)
